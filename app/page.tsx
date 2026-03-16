@@ -7,16 +7,22 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { calculateCredits } from "@/lib/utils";
+import { Progress } from "@/components/ui/progress";
+import { REQUIRED_CREDITS } from "@/lib/course-data";
 
 export default function HomePage() {
   const {
-    state: { courses },
+    state: { courses, taken },
   } = useCourseState();
 
   const total = courses.length;
   const general = courses.filter((c) => c.kind === "general").length;
   const specialized = courses.filter((c) => c.kind === "specialized").length;
   const international = courses.filter((c) => c.kind === "international").length;
+
+  const { completed, planned } = calculateCredits(courses, taken);
 
   return (
     <main className="flex min-h-screen flex-col gap-6 bg-background p-6">
@@ -41,7 +47,29 @@ export default function HomePage() {
             <CardTitle className="text-sm font-medium">教養教育系</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{general}</div>
+            <div className="text-2xl font-bold">
+              {completed.general + planned.general}
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground mb-2">
+              教養教育系科目の修得済 + 予定単位数です。
+            </p>
+            <div className="space-y-1 text-xs">
+              <div className="flex items-center justify-between">
+                <span>修得済 {completed.general}</span>
+                <span className="text-[11px] text-muted-foreground">
+                  予定 {planned.general} / 必要 {REQUIRED_CREDITS.general.total}
+                </span>
+              </div>
+              <Progress
+                value={Math.min(
+                  ((completed.general + planned.general) /
+                    REQUIRED_CREDITS.general.total) *
+                    100,
+                  100,
+                )}
+                className="h-1.5"
+              />
+            </div>
           </CardContent>
         </Card>
         <Card>
@@ -49,7 +77,47 @@ export default function HomePage() {
             <CardTitle className="text-sm font-medium">専門教育系</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{specialized}</div>
+            <div className="text-2xl font-bold">
+              {completed.specializedTotal + planned.specializedTotal}
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground mb-3">
+              修得済 + 予定の専門教育系科目の合計単位数です。
+            </p>
+            <div className="space-y-2 text-xs">
+              {[
+                {
+                  label: "必修",
+                  done: completed.specializedRequired,
+                  plan: planned.specializedRequired,
+                },
+                {
+                  label: "選択必修",
+                  done: completed.specializedSemiRequired,
+                  plan: planned.specializedSemiRequired,
+                },
+                {
+                  label: "選択",
+                  done: completed.specializedElective,
+                  plan: planned.specializedElective,
+                },
+              ].map((row) => {
+                const subtotal = row.done + row.plan;
+                const total =
+                  completed.specializedTotal + planned.specializedTotal || 1;
+                const value = (subtotal / total) * 100;
+                return (
+                  <div key={row.label} className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium">{row.label}</span>
+                      <span className="text-[11px] text-muted-foreground">
+                        修得済 {row.done} / 予定 {row.plan}
+                      </span>
+                    </div>
+                    <Progress value={value} className="h-1.5" />
+                  </div>
+                );
+              })}
+            </div>
           </CardContent>
         </Card>
         <Card>
@@ -57,7 +125,30 @@ export default function HomePage() {
             <CardTitle className="text-sm font-medium">国際性涵養教育系</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{international}</div>
+            <div className="text-2xl font-bold">
+              {completed.international + planned.international}
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground mb-2">
+              国際性涵養教育系科目の修得済 + 予定単位数です。
+            </p>
+            <div className="space-y-1 text-xs">
+              <div className="flex items-center justify-between">
+                <span>修得済 {completed.international}</span>
+                <span className="text-[11px] text-muted-foreground">
+                  予定 {planned.international} / 必要{" "}
+                  {REQUIRED_CREDITS.international.total}
+                </span>
+              </div>
+              <Progress
+                value={Math.min(
+                  ((completed.international + planned.international) /
+                    REQUIRED_CREDITS.international.total) *
+                    100,
+                  100,
+                )}
+                className="h-1.5"
+              />
+            </div>
           </CardContent>
         </Card>
       </section>
@@ -103,7 +194,8 @@ type CourseTableProps = {
 
 function CourseTable({ kind }: CourseTableProps) {
   const {
-    state: { courses },
+    state: { courses, taken },
+    setStatus,
   } = useCourseState();
 
   const filtered = kind ? courses.filter((c) => c.kind === kind) : courses;
@@ -121,6 +213,7 @@ function CourseTable({ kind }: CourseTableProps) {
             <TableHead className="w-[120px]">カテゴリ</TableHead>
             <TableHead>科目名</TableHead>
             <TableHead className="w-[80px] text-right">単位</TableHead>
+            <TableHead className="w-[120px]">状態</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -140,6 +233,23 @@ function CourseTable({ kind }: CourseTableProps) {
               </TableCell>
               <TableCell>{course.name}</TableCell>
               <TableCell className="text-right">{course.credits}</TableCell>
+              <TableCell>
+                <Select
+                  value={taken[course.id]?.status ?? "not-taken"}
+                  onValueChange={(value) =>
+                    setStatus(course.id, value as "not-taken" | "planned" | "completed")
+                  }
+                >
+                  <SelectTrigger className="h-7 w-[110px] text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="not-taken">未履修</SelectItem>
+                    <SelectItem value="planned">予定</SelectItem>
+                    <SelectItem value="completed">修得済</SelectItem>
+                  </SelectContent>
+                </Select>
+              </TableCell>
             </TableRow>
           ))}
         </TableBody>
