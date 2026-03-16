@@ -1,20 +1,26 @@
 // アプリ全体で共有する履修状態・時間割のドメインモデルと Context を定義する
-'use client';
+"use client";
 
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import type { Course } from './course-data';
-import { COURSES } from './course-data';
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import type { Course } from "./course-data";
+import { COURSES } from "./course-data";
 
-export type TakenStatus = 'not-taken' | 'planned' | 'completed';
+export type TakenStatus = "not-taken" | "planned" | "completed";
 
 export type TakenCourseState = {
   courseId: string;
   status: TakenStatus;
   year?: number;
-  semester?: 'spring' | 'summer' | 'fall' | 'winter';
+  semester?: "spring" | "summer" | "fall" | "winter";
 };
 
-export type DayOfWeek = 'mon' | 'tue' | 'wed' | 'thu' | 'fri';
+export type DayOfWeek = "mon" | "tue" | "wed" | "thu" | "fri";
 
 export type Period = 1 | 2 | 3 | 4 | 5 | 6;
 
@@ -42,7 +48,7 @@ type CourseContextValue = {
   removeEntry: (cellId: TimeCellId, courseId: string) => void;
 };
 
-const STORAGE_KEY = 'crm_course_state_v1';
+const STORAGE_KEY = "crm_course_state_v1";
 
 const CourseContext = createContext<CourseContextValue | undefined>(undefined);
 
@@ -53,7 +59,7 @@ function buildInitialState(): CourseState {
   for (const c of courses) {
     taken[c.id] = {
       courseId: c.id,
-      status: 'not-taken',
+      status: "not-taken",
     };
   }
 
@@ -69,7 +75,7 @@ export function CourseProvider({ children }: { children: React.ReactNode }) {
 
   // localStorage から復元
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === "undefined") return;
     try {
       const raw = window.localStorage.getItem(STORAGE_KEY);
       if (!raw) return;
@@ -87,7 +93,7 @@ export function CourseProvider({ children }: { children: React.ReactNode }) {
 
   // 保存
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === "undefined") return;
     try {
       const payload: CourseState = {
         courses: state.courses.map((c) => ({ ...c })), // 互換性維持のために含めておく
@@ -127,7 +133,7 @@ export function CourseProvider({ children }: { children: React.ReactNode }) {
               ...prev.taken,
               [courseId]: {
                 ...(prev.taken[courseId] ?? { courseId }),
-                status: 'planned',
+                status: "planned",
               },
             },
             timetable: {
@@ -149,12 +155,13 @@ export function CourseProvider({ children }: { children: React.ReactNode }) {
 
           return {
             ...prev,
-            taken: !stillExists && prevTaken?.status === 'planned'
-              ? {
-                  ...prev.taken,
-                  [courseId]: { ...prevTaken, status: 'not-taken' },
-                }
-              : prev.taken,
+            taken:
+              !stillExists && prevTaken?.status === "planned"
+                ? {
+                    ...prev.taken,
+                    [courseId]: { ...prevTaken, status: "not-taken" },
+                  }
+                : prev.taken,
             timetable: { entries: nextEntries },
           };
         });
@@ -163,13 +170,15 @@ export function CourseProvider({ children }: { children: React.ReactNode }) {
     [state],
   );
 
-  return <CourseContext.Provider value={value}>{children}</CourseContext.Provider>;
+  return (
+    <CourseContext.Provider value={value}>{children}</CourseContext.Provider>
+  );
 }
 
 export function useCourseState() {
   const ctx = useContext(CourseContext);
   if (!ctx) {
-    throw new Error('useCourseState must be used within CourseProvider');
+    throw new Error("useCourseState must be used within CourseProvider");
   }
   return ctx;
 }
