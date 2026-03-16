@@ -91,14 +91,7 @@ export default function HomePage() {
           </CardContent>
         </Card>
 
-        <Card className="flex-1">
-          <CardHeader>
-            <CardTitle className="text-base">時間割（準備中）</CardTitle>
-          </CardHeader>
-          <CardContent className="flex h-full items-center justify-center text-sm text-muted-foreground">
-            ドラッグ＆ドロップ対応の時間割表をここに実装します。
-          </CardContent>
-        </Card>
+        <TimetableCard />
       </section>
     </main>
   );
@@ -115,6 +108,11 @@ function CourseTable({ kind }: CourseTableProps) {
 
   const filtered = kind ? courses.filter((c) => c.kind === kind) : courses;
 
+  const handleDragStart = (event: React.DragEvent<HTMLTableRowElement>, courseId: string) => {
+    event.dataTransfer.setData("text/course-id", courseId);
+    event.dataTransfer.effectAllowed = "move";
+  };
+
   return (
     <ScrollArea className="h-80">
       <Table>
@@ -127,7 +125,12 @@ function CourseTable({ kind }: CourseTableProps) {
         </TableHeader>
         <TableBody>
           {filtered.map((course) => (
-            <TableRow key={course.id}>
+            <TableRow
+              key={course.id}
+              draggable
+              onDragStart={(e) => handleDragStart(e, course.id)}
+              className="cursor-move"
+            >
               <TableCell>
                 <Badge variant="outline">
                   {course.kind === "general" && "教養"}
@@ -142,5 +145,115 @@ function CourseTable({ kind }: CourseTableProps) {
         </TableBody>
       </Table>
     </ScrollArea>
+  );
+}
+
+function TimetableCard() {
+  return (
+    <Card className="flex-1">
+      <CardHeader>
+        <CardTitle className="text-base">時間割</CardTitle>
+      </CardHeader>
+      <CardContent className="pt-2">
+        <p className="mb-2 text-xs text-muted-foreground">
+          講義一覧から行をドラッグして、時間割のセルにドロップすると履修予定として追加されます。
+        </p>
+        <TimetableGrid />
+      </CardContent>
+    </Card>
+  );
+}
+
+const DAYS: { key: "mon" | "tue" | "wed" | "thu" | "fri"; label: string }[] = [
+  { key: "mon", label: "月" },
+  { key: "tue", label: "火" },
+  { key: "wed", label: "水" },
+  { key: "thu", label: "木" },
+  { key: "fri", label: "金" },
+];
+
+const PERIODS: number[] = [1, 2, 3, 4, 5, 6];
+
+function TimetableGrid() {
+  const {
+    state: { timetable, courses },
+    addEntry,
+    removeEntry,
+  } = useCourseState();
+
+  const handleDrop = (event: React.DragEvent<HTMLDivElement>, dayKey: string, period: number) => {
+    event.preventDefault();
+    const courseId = event.dataTransfer.getData("text/course-id");
+    if (!courseId) return;
+    const cellId = `${dayKey}-${period}` as const;
+    addEntry(cellId, courseId);
+  };
+
+  const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+  };
+
+  return (
+    <div className="overflow-x-auto">
+      <div className="min-w-[560px] rounded-md border">
+        <div className="grid grid-cols-[60px_repeat(5,minmax(0,1fr))] border-b bg-muted/60 text-xs font-medium">
+          <div className="flex items-center justify-center border-r px-2 py-1">時限</div>
+          {DAYS.map((d) => (
+            <div key={d.key} className="flex items-center justify-center border-r px-2 py-1 last:border-r-0">
+              {d.label}
+            </div>
+          ))}
+        </div>
+        {PERIODS.map((p) => (
+          <div
+            key={p}
+            className="grid grid-cols-[60px_repeat(5,minmax(0,1fr))] border-b last:border-b-0 text-xs"
+          >
+            <div className="flex items-center justify-center border-r px-2 py-2">{p}限</div>
+            {DAYS.map((d) => {
+              const cellId = `${d.key}-${p}` as const;
+              const entries = timetable.entries.filter((e) => e.cellId === cellId);
+              return (
+                <div
+                  key={cellId}
+                  className="min-h-[56px] border-r px-1 py-1 last:border-r-0"
+                  onDragOver={handleDragOver}
+                  onDrop={(e) => handleDrop(e, d.key, p)}
+                >
+                  {entries.length === 0 ? (
+                    <div className="flex h-full items-center justify-center rounded-md border border-dashed border-muted-foreground/30 text-[10px] text-muted-foreground">
+                      ドロップ
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-1">
+                      {entries.map((entry) => {
+                        const course = courses.find((c) => c.id === entry.courseId);
+                        if (!course) return null;
+                        return (
+                          <div
+                            key={`${entry.courseId}-${entry.cellId}`}
+                            className="group flex w-full items-center justify-between gap-1 rounded-sm bg-primary/5 px-1 py-0.5 text-[11px] hover:bg-primary/10"
+                          >
+                            <span className="truncate">{course.name}</span>
+                            <button
+                              type="button"
+                              aria-label="このセルから講義を削除"
+                              className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-muted text-[10px] opacity-0 transition-opacity group-hover:opacity-100 hover:bg-muted/80"
+                              onClick={() => removeEntry(cellId, entry.courseId)}
+                            >
+                              ×
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
