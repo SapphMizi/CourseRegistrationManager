@@ -110,16 +110,31 @@ export function CourseProvider({ children }: { children: React.ReactNode }) {
     () => ({
       state,
       setStatus(courseId, status) {
-        setState((prev) => ({
-          ...prev,
-          taken: {
+        setState((prev) => {
+          const nextTaken: Record<string, TakenCourseState> = {
             ...prev.taken,
             [courseId]: {
               ...(prev.taken[courseId] ?? { courseId }),
               status,
             },
-          },
-        }));
+          };
+
+          // 「修得済」に変更された場合は時間割から自動的に削除する
+          const nextTimetable: Timetable =
+            status === "completed"
+              ? {
+                  entries: prev.timetable.entries.filter(
+                    (e) => e.courseId !== courseId,
+                  ),
+                }
+              : prev.timetable;
+
+          return {
+            ...prev,
+            taken: nextTaken,
+            timetable: nextTimetable,
+          };
+        });
       },
       addEntry(cellId, courseId) {
         setState((prev) => {

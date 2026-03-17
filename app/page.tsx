@@ -1,6 +1,7 @@
 // src/app/page.tsx
 "use client";
 
+import * as React from "react";
 import { useCourseState } from "@/lib/state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -11,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { calculateCredits } from "@/lib/utils";
 import { Progress } from "@/components/ui/progress";
 import { REQUIRED_CREDITS } from "@/lib/course-data";
+import { Input } from "@/components/ui/input";
 
 export default function HomePage() {
   const {
@@ -198,63 +200,113 @@ function CourseTable({ kind }: CourseTableProps) {
     setStatus,
   } = useCourseState();
 
-  const filtered = kind ? courses.filter((c) => c.kind === kind) : courses;
+  const [query, setQuery] = React.useState("");
+
+  const base = kind ? courses.filter((c) => c.kind === kind) : courses;
+  const filtered = base.filter((c) => {
+    if (!query.trim()) return true;
+    const q = query.toLowerCase();
+    return (
+      c.name.toLowerCase().includes(q) ||
+      c.id.toLowerCase().includes(q)
+    );
+  });
 
   const handleDragStart = (event: React.DragEvent<HTMLTableRowElement>, courseId: string) => {
+    const status = taken[courseId]?.status ?? "not-taken";
+    // 修得済の講義は時間割に追加できない
+    if (status === "completed") {
+      event.preventDefault();
+      return;
+    }
     event.dataTransfer.setData("text/course-id", courseId);
     event.dataTransfer.effectAllowed = "move";
   };
 
   return (
-    <ScrollArea className="h-80">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-[120px]">カテゴリ</TableHead>
-            <TableHead>科目名</TableHead>
-            <TableHead className="w-[80px] text-right">単位</TableHead>
-            <TableHead className="w-[120px]">状態</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {filtered.map((course) => (
-            <TableRow
-              key={course.id}
-              draggable
-              onDragStart={(e) => handleDragStart(e, course.id)}
-              className="cursor-move"
-            >
-              <TableCell>
-                <Badge variant="outline">
-                  {course.kind === "general" && "教養"}
-                  {course.kind === "specialized" && "専門"}
-                  {course.kind === "international" && "国際"}
-                </Badge>
-              </TableCell>
-              <TableCell>{course.name}</TableCell>
-              <TableCell className="text-right">{course.credits}</TableCell>
-              <TableCell>
-                <Select
-                  value={taken[course.id]?.status ?? "not-taken"}
-                  onValueChange={(value) =>
-                    setStatus(course.id, value as "not-taken" | "planned" | "completed")
-                  }
-                >
-                  <SelectTrigger className="h-7 w-[110px] text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="not-taken">未履修</SelectItem>
-                    <SelectItem value="planned">予定</SelectItem>
-                    <SelectItem value="completed">修得済</SelectItem>
-                  </SelectContent>
-                </Select>
-              </TableCell>
+    <>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <Input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="科目名・科目コードで検索"
+          className="h-8 text-xs"
+        />
+        <span className="text-[11px] text-muted-foreground">
+          件数: {filtered.length}
+        </span>
+      </div>
+      <ScrollArea className="h-80">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-[100px]">カテゴリ</TableHead>
+              <TableHead className="w-[100px]">専門区分</TableHead>
+              <TableHead>科目名</TableHead>
+              <TableHead className="w-[80px] text-right">単位</TableHead>
+              <TableHead className="w-[120px]">状態</TableHead>
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </ScrollArea>
+          </TableHeader>
+          <TableBody>
+            {filtered.map((course) => (
+              <TableRow
+                key={course.id}
+                draggable
+                onDragStart={(e) => handleDragStart(e, course.id)}
+                className="cursor-move"
+              >
+                <TableCell>
+                  <Badge variant="outline">
+                    {course.kind === "general" && "教養"}
+                    {course.kind === "specialized" && "専門"}
+                    {course.kind === "international" && "国際"}
+                  </Badge>
+                </TableCell>
+                <TableCell>
+                  {course.kind === "specialized" && course.specializedCategory ? (
+                    <Badge
+                      variant="secondary"
+                      className={
+                        course.specializedCategory === "required"
+                          ? "bg-primary/10 text-primary"
+                          : course.specializedCategory === "semiRequired"
+                            ? "bg-amber-500/10 text-amber-700 dark:text-amber-400"
+                            : "bg-muted text-muted-foreground"
+                      }
+                    >
+                      {course.specializedCategory === "required" && "必修"}
+                      {course.specializedCategory === "semiRequired" && "選択必修"}
+                      {course.specializedCategory === "elective" && "選択"}
+                    </Badge>
+                  ) : (
+                    <span className="text-muted-foreground text-xs">—</span>
+                  )}
+                </TableCell>
+                <TableCell>{course.name}</TableCell>
+                <TableCell className="text-right">{course.credits}</TableCell>
+                <TableCell>
+                  <Select
+                    value={taken[course.id]?.status ?? "not-taken"}
+                    onValueChange={(value) =>
+                      setStatus(course.id, value as "not-taken" | "planned" | "completed")
+                    }
+                  >
+                    <SelectTrigger className="h-7 w-[110px] text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="not-taken">未履修</SelectItem>
+                      <SelectItem value="planned">予定</SelectItem>
+                      <SelectItem value="completed">修得済</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </ScrollArea>
+    </>
   );
 }
 
