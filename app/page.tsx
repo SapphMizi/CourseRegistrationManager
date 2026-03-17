@@ -191,29 +191,29 @@ export default function HomePage() {
         </Card>
       </section>
 
-      <section className="flex flex-1 flex-col gap-4 px-6 pb-6 md:flex-row">
-        <Card className="flex-1">
-          <CardHeader>
+      <section className="flex h-[calc(100vh-14rem)] min-h-[600px] flex-col gap-4 px-6 pb-6 md:flex-row">
+        <Card className="flex h-full flex-col md:w-[360px] md:flex-shrink-0">
+          <CardHeader className="flex-shrink-0">
             <CardTitle className="text-base">講義一覧</CardTitle>
           </CardHeader>
-          <CardContent className="pt-0">
-            <Tabs defaultValue="all">
-              <TabsList className="mt-2">
+          <CardContent className="flex min-h-0 flex-1 flex-col overflow-hidden pt-0">
+            <Tabs defaultValue="all" className="flex h-full flex-col">
+              <TabsList className="mt-2 flex-shrink-0">
                 <TabsTrigger value="all">すべて</TabsTrigger>
                 <TabsTrigger value="general">教養</TabsTrigger>
                 <TabsTrigger value="specialized">専門</TabsTrigger>
                 <TabsTrigger value="international">国際</TabsTrigger>
               </TabsList>
-              <TabsContent value="all" className="mt-3">
+              <TabsContent value="all" className="mt-3 flex-1 overflow-hidden data-[state=inactive]:hidden">
                 <CourseTable />
               </TabsContent>
-              <TabsContent value="general" className="mt-3">
+              <TabsContent value="general" className="mt-3 flex-1 overflow-hidden data-[state=inactive]:hidden">
                 <CourseTable kind="general" />
               </TabsContent>
-              <TabsContent value="specialized" className="mt-3">
+              <TabsContent value="specialized" className="mt-3 flex-1 overflow-hidden data-[state=inactive]:hidden">
                 <CourseTable kind="specialized" />
               </TabsContent>
-              <TabsContent value="international" className="mt-3">
+              <TabsContent value="international" className="mt-3 flex-1 overflow-hidden data-[state=inactive]:hidden">
                 <CourseTable kind="international" />
               </TabsContent>
             </Tabs>
@@ -356,8 +356,8 @@ function CourseTable({ kind }: CourseTableProps) {
   };
 
   return (
-    <>
-      <div className="mb-2 flex items-center justify-between gap-2">
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="mb-2 flex flex-shrink-0 items-center justify-between gap-2">
         <Input
           value={query}
           onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
@@ -370,15 +370,14 @@ function CourseTable({ kind }: CourseTableProps) {
           件数: {filtered.length}
         </span>
       </div>
-      <ScrollArea className="h-80">
-        <Table>
+      <ScrollArea className="min-h-0 flex-1">
+        <Table className="table-fixed w-full text-xs">
           <TableHeader>
             <TableRow>
-              <TableHead className="w-[100px]">カテゴリ</TableHead>
-              <TableHead className="w-[100px]">専門区分</TableHead>
-              <TableHead>科目名</TableHead>
-              <TableHead className="w-[80px] text-right">単位</TableHead>
-              <TableHead className="w-[120px]">状態</TableHead>
+              <TableHead className="w-[48px] px-1">区分</TableHead>
+              <TableHead className="px-1">科目名</TableHead>
+              <TableHead className="w-[32px] px-1 text-right">単位</TableHead>
+              <TableHead className="w-[80px] px-1">状態</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -389,43 +388,43 @@ function CourseTable({ kind }: CourseTableProps) {
                 onDragStart={(e) => handleDragStart(e, course.id)}
                 className="cursor-move"
               >
-                <TableCell>
-                  <Badge variant="outline">
-                    {course.kind === "general" && "教養"}
-                    {course.kind === "specialized" && "専門"}
-                    {course.kind === "international" && "国際"}
-                  </Badge>
-                </TableCell>
-                <TableCell>
-                  {course.kind === "specialized" && course.specializedCategory ? (
-                    <Badge
-                      variant="secondary"
-                      className={
-                        course.specializedCategory === "required"
-                          ? "bg-primary/10 text-primary"
-                          : course.specializedCategory === "semiRequired"
-                            ? "bg-amber-500/10 text-amber-700 dark:text-amber-400"
-                            : "bg-muted text-muted-foreground"
-                      }
-                    >
-                      {course.specializedCategory === "required" && "必修"}
-                      {course.specializedCategory === "semiRequired" && "選択必修"}
-                      {course.specializedCategory === "elective" && "選択"}
+                <TableCell className="px-1 py-1">
+                  <div className="flex flex-col gap-0.5">
+                    <Badge variant="outline" className="text-[10px] px-1 py-0">
+                      {course.kind === "general" && "教養"}
+                      {course.kind === "specialized" && "専門"}
+                      {course.kind === "international" && "国際"}
                     </Badge>
-                  ) : (
-                    <span className="text-muted-foreground text-xs">—</span>
-                  )}
+                    {course.kind === "specialized" && course.specializedCategory && (
+                      <Badge
+                        variant="secondary"
+                        className={`text-[10px] px-1 py-0 ${
+                          course.specializedCategory === "required"
+                            ? "bg-primary/10 text-primary"
+                            : course.specializedCategory === "semiRequired"
+                              ? "bg-amber-500/10 text-amber-700 dark:text-amber-400"
+                              : "bg-muted text-muted-foreground"
+                        }`}
+                      >
+                        {course.specializedCategory === "required" && "必修"}
+                        {course.specializedCategory === "semiRequired" && "選必"}
+                        {course.specializedCategory === "elective" && "選択"}
+                      </Badge>
+                    )}
+                  </div>
                 </TableCell>
-                <TableCell>{course.name}</TableCell>
-                <TableCell className="text-right">{course.credits}</TableCell>
-                <TableCell>
+                <TableCell className="px-1 py-1 break-words whitespace-normal">
+                  {course.name}
+                </TableCell>
+                <TableCell className="px-1 py-1 text-right">{course.credits}</TableCell>
+                <TableCell className="px-1 py-1">
                   <Select
                     value={taken[course.id]?.status ?? "not-taken"}
                     onValueChange={(value) =>
                       setStatus(course.id, value as "not-taken" | "planned" | "completed")
                     }
                   >
-                    <SelectTrigger className="h-7 w-[110px] text-xs">
+                    <SelectTrigger className="h-6 w-full text-[10px]">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -440,21 +439,23 @@ function CourseTable({ kind }: CourseTableProps) {
           </TableBody>
         </Table>
       </ScrollArea>
-    </>
+    </div>
   );
 }
 
 function TimetableCard() {
   return (
-    <Card className="flex-1">
-      <CardHeader>
+    <Card className="flex flex-1 flex-col overflow-hidden">
+      <CardHeader className="flex-shrink-0">
         <CardTitle className="text-base">時間割</CardTitle>
       </CardHeader>
-      <CardContent className="pt-2">
-        <p className="mb-2 text-xs text-muted-foreground">
+      <CardContent className="flex flex-1 flex-col overflow-hidden pt-2">
+        <p className="mb-2 flex-shrink-0 text-xs text-muted-foreground">
           講義一覧から行をドラッグして、時間割のセルにドロップすると履修予定として追加されます。
         </p>
-        <TimetableGrid />
+        <ScrollArea className="flex-1">
+          <TimetableGrid />
+        </ScrollArea>
       </CardContent>
     </Card>
   );
