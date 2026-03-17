@@ -9,15 +9,18 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { calculateCredits } from "@/lib/utils";
+import { calculateCredits, getGraduationSummary } from "@/lib/utils";
 import { Progress } from "@/components/ui/progress";
 import { REQUIRED_CREDITS } from "@/lib/course-data";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 
 export default function HomePage() {
   const {
     state: { courses, taken },
   } = useCourseState();
+
+  const [includePlanned, setIncludePlanned] = React.useState(false);
 
   const total = courses.length;
   const general = courses.filter((c) => c.kind === "general").length;
@@ -25,17 +28,33 @@ export default function HomePage() {
   const international = courses.filter((c) => c.kind === "international").length;
 
   const { completed, planned } = calculateCredits(courses, taken);
+  const graduation = getGraduationSummary(courses, taken, includePlanned);
 
   return (
-    <main className="flex min-h-screen flex-col gap-6 bg-background p-6">
-      <header>
+    <main className="flex min-h-screen flex-col gap-6 bg-background">
+      <header className="sticky top-0 z-20 border-b bg-background/95 px-6 py-4 backdrop-blur">
         <h1 className="text-2xl font-bold tracking-tight">Course Registration Manager</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           履修予定と取得単位をカテゴリ別に管理するダッシュボードです。
         </p>
+        <div className="mt-3 flex items-center gap-3 text-xs text-muted-foreground">
+          <span>単位表示モード:</span>
+          <div className="flex items-center gap-2">
+            <span className={!includePlanned ? "font-semibold text-foreground" : ""}>
+              修得済のみ
+            </span>
+            <Switch
+              checked={includePlanned}
+              onCheckedChange={(v) => setIncludePlanned(!!v)}
+            />
+            <span className={includePlanned ? "font-semibold text-foreground" : ""}>
+              修得済 + 予定
+            </span>
+          </div>
+        </div>
       </header>
 
-      <section className="grid gap-4 md:grid-cols-4">
+      <section className="grid gap-4 px-6 pt-2 md:grid-cols-4">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">総講義数</CardTitle>
@@ -50,7 +69,9 @@ export default function HomePage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {completed.general + planned.general}
+              {includePlanned
+                ? completed.general + planned.general
+                : completed.general}
             </div>
             <p className="mt-1 text-xs text-muted-foreground mb-2">
               教養教育系科目の修得済 + 予定単位数です。
@@ -64,7 +85,9 @@ export default function HomePage() {
               </div>
               <Progress
                 value={Math.min(
-                  ((completed.general + planned.general) /
+                  ((includePlanned
+                    ? completed.general + planned.general
+                    : completed.general) /
                     REQUIRED_CREDITS.general.total) *
                     100,
                   100,
@@ -80,7 +103,9 @@ export default function HomePage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {completed.specializedTotal + planned.specializedTotal}
+              {includePlanned
+                ? completed.specializedTotal + planned.specializedTotal
+                : completed.specializedTotal}
             </div>
             <p className="mt-1 text-xs text-muted-foreground mb-3">
               修得済 + 予定の専門教育系科目の合計単位数です。
@@ -103,9 +128,10 @@ export default function HomePage() {
                   plan: planned.specializedElective,
                 },
               ].map((row) => {
-                const subtotal = row.done + row.plan;
-                const total =
-                  completed.specializedTotal + planned.specializedTotal || 1;
+                const subtotal = includePlanned ? row.done + row.plan : row.done;
+                const total = includePlanned
+                  ? completed.specializedTotal + planned.specializedTotal || 1
+                  : completed.specializedTotal || 1;
                 const value = (subtotal / total) * 100;
                 return (
                   <div key={row.label} className="space-y-1">
@@ -128,7 +154,9 @@ export default function HomePage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {completed.international + planned.international}
+              {includePlanned
+                ? completed.international + planned.international
+                : completed.international}
             </div>
             <p className="mt-1 text-xs text-muted-foreground mb-2">
               国際性涵養教育系科目の修得済 + 予定単位数です。
@@ -143,7 +171,9 @@ export default function HomePage() {
               </div>
               <Progress
                 value={Math.min(
-                  ((completed.international + planned.international) /
+                  ((includePlanned
+                    ? completed.international + planned.international
+                    : completed.international) /
                     REQUIRED_CREDITS.international.total) *
                     100,
                   100,
@@ -155,7 +185,7 @@ export default function HomePage() {
         </Card>
       </section>
 
-      <section className="flex flex-1 flex-col gap-4 md:flex-row">
+      <section className="flex flex-1 flex-col gap-4 px-6 pb-6 md:flex-row">
         <Card className="flex-1">
           <CardHeader>
             <CardTitle className="text-base">講義一覧</CardTitle>
@@ -185,6 +215,102 @@ export default function HomePage() {
         </Card>
 
         <TimetableCard />
+      </section>
+
+      <section>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">卒業要件との比較</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[200px]">要件</TableHead>
+                    <TableHead className="w-[120px] text-right">
+                      必要単位
+                    </TableHead>
+                    <TableHead className="w-[120px] text-right">
+                      修得済単位
+                    </TableHead>
+                    <TableHead className="w-[80px] text-center">
+                      達成
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  <TableRow>
+                    <TableCell>教養教育系科目をすべて取得</TableCell>
+                    <TableCell className="text-right">
+                      {graduation.general.required}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {graduation.general.completed}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {graduation.general.ok ? "達成" : "未達"}
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>国際性涵養教育系科目をすべて取得</TableCell>
+                    <TableCell className="text-right">
+                      {graduation.international.required}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {graduation.international.completed}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {graduation.international.ok ? "達成" : "未達"}
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>
+                      専門教育科目（必修）1〜3年時配当科目の全取得
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {graduation.specializedRequiredEarly.required}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {graduation.specializedRequiredEarly.completed}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {graduation.specializedRequiredEarly.ok ? "達成" : "未達"}
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>専門教育科目（選択必修）28単位以上</TableCell>
+                    <TableCell className="text-right">
+                      {graduation.specializedSelect.semiRequired.required}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {graduation.specializedSelect.semiRequired.completed}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {graduation.specializedSelect.semiRequired.ok
+                        ? "達成"
+                        : "未達"}
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>
+                      専門教育科目（選択必修・選択）合計38単位以上
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {graduation.specializedSelect.total.required}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {graduation.specializedSelect.total.completed}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {graduation.specializedSelect.total.ok ? "達成" : "未達"}
+                    </TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
       </section>
     </main>
   );
