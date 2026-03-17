@@ -2,7 +2,13 @@
 "use client";
 
 import * as React from "react";
-import { useCourseState } from "@/lib/state";
+import {
+  useCourseState,
+  TERM_ORDER,
+  termIndex,
+  type Term,
+  type TimeCellId,
+} from "@/lib/state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -354,7 +360,9 @@ function CourseTable({ kind }: CourseTableProps) {
       <div className="mb-2 flex items-center justify-between gap-2">
         <Input
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+            setQuery(e.target.value)
+          }
           placeholder="科目名・科目コードで検索"
           className="h-8 text-xs"
         />
@@ -462,80 +470,241 @@ const DAYS: { key: "mon" | "tue" | "wed" | "thu" | "fri"; label: string }[] = [
 
 const PERIODS: number[] = [1, 2, 3, 4, 5, 6];
 
+const TERMS = [
+  { key: "spring", label: "春学期", color: "bg-pink-100/60 dark:bg-pink-900/40" },
+  { key: "summer", label: "夏学期", color: "bg-lime-100/60 dark:bg-lime-900/40" },
+  { key: "autumn", label: "秋学期", color: "bg-amber-100/60 dark:bg-amber-900/40" },
+  { key: "winter", label: "冬学期", color: "bg-cyan-100/60 dark:bg-cyan-900/40" },
+] as const;
+
 function TimetableGrid() {
   const {
     state: { timetable, courses },
     addEntry,
     removeEntry,
+    updateEntryTerms,
   } = useCourseState();
-
-  const handleDrop = (event: React.DragEvent<HTMLDivElement>, dayKey: string, period: number) => {
-    event.preventDefault();
-    const courseId = event.dataTransfer.getData("text/course-id");
-    if (!courseId) return;
-    const cellId = `${dayKey}-${period}` as const;
-    addEntry(cellId, courseId);
-  };
 
   const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+  };
+
+  const handleDrop = (
+    event: React.DragEvent<HTMLDivElement>,
+    dayKey: string,
+    period: number,
+    termKey: Term,
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const resizeData = event.dataTransfer.getData("text/resize");
+    if (resizeData) {
+      const [type, srcCellId, courseId] = resizeData.split("|");
+      const targetCellId = `${dayKey}-${period}`;
+      if (srcCellId !== targetCellId) return;
+
+      const entry = timetable.entries.find(
+        (e) => e.cellId === srcCellId && e.courseId === courseId,
+      );
+      if (!entry) return;
+
+      if (type === "start") {
+        updateEntryTerms(
+          srcCellId as TimeCellId,
+          courseId,
+          termKey,
+          entry.endTerm,
+        );
+      } else {
+        updateEntryTerms(
+          srcCellId as TimeCellId,
+          courseId,
+          entry.startTerm,
+          termKey,
+        );
+      }
+      return;
+    }
+
+    const courseId = event.dataTransfer.getData("text/course-id");
+    if (!courseId) return;
+    const cellId = `${dayKey}-${period}` as TimeCellId;
+    addEntry(cellId, courseId, termKey);
+  };
+
+  const handleResizeDragStart = (
+    event: React.DragEvent<HTMLDivElement>,
+    type: "start" | "end",
+    cellId: string,
+    courseId: string,
+  ) => {
+    event.stopPropagation();
+    event.dataTransfer.setData(
+      "text/resize",
+      `${type}|${cellId}|${courseId}`,
+    );
+    event.dataTransfer.effectAllowed = "move";
   };
 
   return (
     <div className="overflow-x-auto">
       <div className="min-w-[560px] rounded-md border">
+        {/* Day headers */}
         <div className="grid grid-cols-[60px_repeat(5,minmax(0,1fr))] border-b bg-muted/60 text-xs font-medium">
-          <div className="flex items-center justify-center border-r px-2 py-1">時限</div>
+          <div className="flex items-center justify-center border-r px-2 py-1">
+            時限
+          </div>
           {DAYS.map((d) => (
-            <div key={d.key} className="flex items-center justify-center border-r px-2 py-1 last:border-r-0">
+            <div
+              key={d.key}
+              className="flex items-center justify-center border-r px-2 py-1 last:border-r-0"
+            >
               {d.label}
             </div>
           ))}
         </div>
+
+        {/* Term sub-header row */}
+        <div className="grid grid-cols-[60px_repeat(5,minmax(0,1fr))] border-b bg-muted/30 text-[9px] text-muted-foreground">
+          <div className="border-r" />
+          {DAYS.map((d) => (
+            <div
+              key={d.key}
+              className="grid grid-cols-4 border-r last:border-r-0"
+            >
+              {TERMS.map((t) => (
+                <div
+                  key={t.key}
+                  className={`py-0.5 text-center ${t.color}`}
+                >
+                  {t.label.charAt(0)}
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+
+        {/* Period rows */}
         {PERIODS.map((p) => (
           <div
             key={p}
             className="grid grid-cols-[60px_repeat(5,minmax(0,1fr))] border-b last:border-b-0 text-xs"
           >
-            <div className="flex items-center justify-center border-r px-2 py-2">{p}限</div>
+            <div className="flex items-center justify-center border-r px-2 py-2">
+              {p}限
+            </div>
             {DAYS.map((d) => {
-              const cellId = `${d.key}-${p}` as const;
-              const entries = timetable.entries.filter((e) => e.cellId === cellId);
+              const cellId = `${d.key}-${p}` as TimeCellId;
+              const cellEntries = timetable.entries.filter(
+                (e) => e.cellId === cellId,
+              );
               return (
                 <div
                   key={cellId}
-                  className="min-h-[56px] border-r px-1 py-1 last:border-r-0"
-                  onDragOver={handleDragOver}
-                  onDrop={(e) => handleDrop(e, d.key, p)}
+                  className="group relative border-r last:border-r-0"
+                  style={{ minHeight: "96px" }}
                 >
-                  {entries.length === 0 ? (
-                    <div className="flex h-full items-center justify-center rounded-md border border-dashed border-muted-foreground/30 text-[10px] text-muted-foreground">
-                      ドロップ
-                    </div>
-                  ) : (
-                    <div className="flex flex-col gap-1">
-                      {entries.map((entry) => {
-                        const course = courses.find((c) => c.id === entry.courseId);
-                        if (!course) return null;
-                        return (
+                  {/* Term lane backgrounds & drop targets */}
+                  <div className="flex h-full">
+                    {TERMS.map((term, tIdx) => {
+                      const isOccupied = cellEntries.some((e) => {
+                        const si = termIndex(e.startTerm);
+                        const ei = termIndex(e.endTerm);
+                        return tIdx >= si && tIdx <= ei;
+                      });
+                      return (
+                        <div
+                          key={term.key}
+                          className={`flex flex-1 items-center justify-center border-r last:border-r-0 ${term.color}`}
+                          onDragOver={handleDragOver}
+                          onDrop={(e) =>
+                            handleDrop(e, d.key, p, term.key as Term)
+                          }
+                        >
+                          {!isOccupied && (
+                            <span className="select-none text-[9px] text-muted-foreground/40">
+                              {term.label.charAt(0)}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Course card overlays */}
+                  {cellEntries.map((entry, entryIdx) => {
+                    const course = courses.find(
+                      (c) => c.id === entry.courseId,
+                    );
+                    if (!course) return null;
+                    const si = termIndex(entry.startTerm);
+                    const ei = termIndex(entry.endTerm);
+                    const leftPct = (si / 4) * 100;
+                    const widthPct = ((ei - si + 1) / 4) * 100;
+                    return (
+                      <div
+                        key={entry.courseId}
+                        className="pointer-events-none absolute"
+                        style={{
+                          left: `${leftPct}%`,
+                          width: `${widthPct}%`,
+                          top: `${2 + entryIdx * 32}px`,
+                          bottom: "2px",
+                        }}
+                      >
+                        <div className="flex h-full items-stretch">
+                          {/* Left resize handle (adjusts startTerm) */}
                           <div
-                            key={`${entry.courseId}-${entry.cellId}`}
-                            className="group flex w-full items-center justify-between gap-1 rounded-sm bg-primary/5 px-1 py-0.5 text-[11px] hover:bg-primary/10"
-                          >
-                            <span className="truncate">{course.name}</span>
+                            draggable
+                            onDragStart={(e) =>
+                              handleResizeDragStart(
+                                e,
+                                "start",
+                                cellId,
+                                entry.courseId,
+                              )
+                            }
+                            className="pointer-events-auto z-10 w-1.5 flex-shrink-0 cursor-ew-resize rounded-l bg-primary/30 opacity-0 transition-opacity group-hover:opacity-100"
+                          />
+                          {/* Card body */}
+                          <div className="pointer-events-none relative flex min-w-0 flex-1 flex-col items-center justify-center overflow-hidden border-y border-primary/30 bg-primary/10 px-1 text-[9px] leading-tight shadow-sm">
+                            <span className="w-full truncate text-center font-medium">
+                              {course.name}
+                            </span>
+                            <span className="text-[8px] text-muted-foreground">
+                              {course.credits}単位
+                            </span>
+                            {/* Delete button */}
                             <button
                               type="button"
                               aria-label="このセルから講義を削除"
-                              className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-muted text-[10px] opacity-0 transition-opacity group-hover:opacity-100 hover:bg-muted/80"
-                              onClick={() => removeEntry(cellId, entry.courseId)}
+                              className="pointer-events-auto absolute -right-0.5 -top-0.5 z-20 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full bg-muted text-[9px] opacity-0 transition-opacity group-hover:opacity-100 hover:bg-muted/80"
+                              onClick={() =>
+                                removeEntry(cellId, entry.courseId)
+                              }
                             >
                               ×
                             </button>
                           </div>
-                        );
-                      })}
-                    </div>
-                  )}
+                          {/* Right resize handle (adjusts endTerm) */}
+                          <div
+                            draggable
+                            onDragStart={(e) =>
+                              handleResizeDragStart(
+                                e,
+                                "end",
+                                cellId,
+                                entry.courseId,
+                              )
+                            }
+                            className="pointer-events-auto z-10 w-1.5 flex-shrink-0 cursor-ew-resize rounded-r bg-primary/30 opacity-0 transition-opacity group-hover:opacity-100"
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               );
             })}
