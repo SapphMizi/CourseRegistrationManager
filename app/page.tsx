@@ -400,7 +400,7 @@ function CourseTable({ kind }: CourseTableProps) {
                         variant="secondary"
                         className={`text-[10px] px-1 py-0 ${
                           course.specializedCategory === "required"
-                            ? "bg-primary/10 text-primary"
+                            ? "bg-red-500/10 text-red-600 dark:text-red-400"
                             : course.specializedCategory === "semiRequired"
                               ? "bg-amber-500/10 text-amber-700 dark:text-amber-400"
                               : "bg-muted text-muted-foreground"
@@ -635,27 +635,53 @@ function TimetableGrid() {
                   </div>
 
                   {/* Course card overlays */}
-                  {cellEntries.map((entry, entryIdx) => {
-                    const course = courses.find(
-                      (c) => c.id === entry.courseId,
-                    );
-                    if (!course) return null;
-                    const si = termIndex(entry.startTerm);
-                    const ei = termIndex(entry.endTerm);
-                    const leftPct = (si / 4) * 100;
-                    const widthPct = ((ei - si + 1) / 4) * 100;
-                    return (
-                      <div
-                        key={entry.courseId}
-                        className="pointer-events-none absolute"
-                        style={{
-                          left: `${leftPct}%`,
-                          width: `${widthPct}%`,
-                          top: `${2 + entryIdx * 32}px`,
-                          bottom: "2px",
-                        }}
-                      >
-                        <div className="flex h-full items-stretch">
+                  {(() => {
+                    const occupiedLanes: { row: number; si: number; ei: number }[] = [];
+                    const rowMap = new Map<string, number>();
+
+                    cellEntries.forEach((entry) => {
+                      const si = termIndex(entry.startTerm);
+                      const ei = termIndex(entry.endTerm);
+                      let row = 0;
+                      // overlap check: not (A ends before B starts OR A starts after B ends)
+                      while (
+                        occupiedLanes.some(
+                          (lane) => lane.row === row && !(ei < lane.si || si > lane.ei),
+                        )
+                      ) {
+                        row++;
+                      }
+                      occupiedLanes.push({ row, si, ei });
+                      rowMap.set(entry.courseId, row);
+                    });
+
+                    const rowCount =
+                      cellEntries.length > 0
+                        ? Math.max(...Array.from(rowMap.values())) + 1
+                        : 1;
+
+                    return cellEntries.map((entry) => {
+                      const course = courses.find((c) => c.id === entry.courseId);
+                      if (!course) return null;
+                      const si = termIndex(entry.startTerm);
+                      const ei = termIndex(entry.endTerm);
+                      const leftPct = (si / 4) * 100;
+                      const widthPct = ((ei - si + 1) / 4) * 100;
+                      const row = rowMap.get(entry.courseId) ?? 0;
+                      const rowHeightPct = 100 / rowCount;
+
+                      return (
+                        <div
+                          key={entry.courseId}
+                          className="pointer-events-none absolute"
+                          style={{
+                            left: `${leftPct}%`,
+                            width: `${widthPct}%`,
+                            top: `calc(${row * rowHeightPct}% + 2px)`,
+                            height: `calc(${rowHeightPct}% - 4px)`,
+                          }}
+                        >
+                          <div className="flex h-full items-stretch">
                           {/* Left resize handle (adjusts startTerm) */}
                           <div
                             draggable
@@ -671,6 +697,26 @@ function TimetableGrid() {
                           />
                           {/* Card body */}
                           <div className="pointer-events-none relative flex min-w-0 flex-1 flex-col items-center justify-center overflow-hidden border-y border-primary/30 bg-primary/10 px-1 text-[9px] leading-tight shadow-sm">
+                            <div className="mb-0.5 flex flex-wrap items-center justify-center gap-0.5">
+                              <span className="rounded-[2px] border border-muted-foreground/30 px-0.5 text-[7px] text-muted-foreground">
+                                {course.kind === "general" && "教養"}
+                                {course.kind === "specialized" && "専門"}
+                                {course.kind === "international" && "国際"}
+                              </span>
+                              {course.kind === "specialized" && course.specializedCategory && (
+                                <span className={`rounded-[2px] px-0.5 text-[7px] ${
+                                  course.specializedCategory === "required"
+                                    ? "bg-red-500/20 text-red-600 dark:text-red-400"
+                                    : course.specializedCategory === "semiRequired"
+                                      ? "bg-amber-500/20 text-amber-700 dark:text-amber-400"
+                                      : "bg-muted-foreground/20 text-muted-foreground"
+                                }`}>
+                                  {course.specializedCategory === "required" && "必修"}
+                                  {course.specializedCategory === "semiRequired" && "選必"}
+                                  {course.specializedCategory === "elective" && "選択"}
+                                </span>
+                              )}
+                            </div>
                             <span className="w-full truncate text-center font-medium">
                               {course.name}
                             </span>
@@ -705,7 +751,8 @@ function TimetableGrid() {
                         </div>
                       </div>
                     );
-                  })}
+                  });
+                })()}
                 </div>
               );
             })}
